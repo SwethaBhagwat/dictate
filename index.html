@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Dictate">
+<meta name="theme-color" content="#0f1a24">
+<title>Dictate</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎙️%3C/text%3E%3C/svg%3E">
+<style>
+:root{--bg:#e9edf1;--card:#f8fafb;--ink:#14202b;--mute:#5d6b78;--line:#cfd8e0;--acc:#2457c5;--rec:#c8344a;--ok:#1f7a55}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1a24;--card:#162431;--ink:#e3ebf2;--mute:#8a9bab;--line:#263847;--acc:#7fb0ff;--rec:#ff6b80;--ok:#6fcfa2}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-text-size-adjust:100%}
+body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+main{max-width:640px;margin:0 auto;padding:14px 14px 40px;display:grid;gap:12px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+h1{font:600 20px/1 system-ui,sans-serif;margin:0;letter-spacing:-.01em}
+h2{font-size:15px;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+select,button,textarea{font:inherit;color:inherit}
+select{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+button{cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px 14px;min-height:44px}
+button.primary{background:var(--acc);border-color:var(--acc);color:var(--bg);font-weight:600}
+button:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+#modes{display:flex;gap:8px;overflow-x:auto}
+.chip{border-radius:999px;padding:8px 16px;white-space:nowrap}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+#recwrap{display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px 0 14px}
+#rec{width:84px;height:84px;border-radius:50%;background:var(--rec);border:0;display:grid;place-items:center;padding:0}
+#rec i{width:26px;height:26px;border-radius:50%;background:var(--card);transition:border-radius .15s}
+#rec.on i{border-radius:5px}
+#rec.on{animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 12px color-mix(in srgb,var(--rec) 25%,transparent)}}
+@media(prefers-reduced-motion:reduce){#rec.on{animation:none}}
+#timer{font-variant-numeric:tabular-nums;color:var(--mute)}
+#timer.warn{color:var(--rec);font-weight:600}
+#status{min-height:1.4em;color:var(--mute);font-size:14px;text-align:center}
+#status.err{color:var(--rec)}
+textarea{width:100%;min-height:42vh;resize:vertical;border:1px solid var(--line);border-radius:10px;background:transparent;padding:12px;font:18px/1.6 Charter,"Iowan Old Style",Georgia,serif}
+.row{display:flex;gap:8px;margin-top:10px}
+.row button{flex:1}
+#fixes{font-size:13px;color:var(--mute);margin-top:8px}
+details summary{cursor:pointer;font-weight:600;min-height:32px}
+pre{white-space:pre-wrap;font:14px/1.5 system-ui;color:var(--mute);margin:8px 0 0}
+label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
+.g{min-height:110px;font:14px/1.5 ui-monospace,Menlo,monospace}
+.note{border-top:1px solid var(--line);padding:10px 0;display:flex;gap:10px;align-items:flex-start}
+.note:first-of-type{border-top:0}
+.note div{flex:1;min-width:0}
+.note small{color:var(--mute)}
+.note p{margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note button{min-height:36px;padding:6px 10px;font-size:14px}
+#bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:10px 0 0}
+#bar b{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Dictate</h1>
+  <span><span id="dev" style="color:var(--mute);font-size:13px"></span>
+  <select id="model" aria-label="Speech model">
+    <option value="base">Fast (base)</option>
+    <option value="small">Accurate (small)</option>
+  </select></span>
+</header>
+
+<section class="card" id="setup">
+  <h2>One-time setup</h2>
+  <div style="font-size:14px;color:var(--mute)">Downloads the speech model (about 100–350 MB, use Wi-Fi). After this, transcription runs on your phone and your audio is never uploaded.</div>
+  <div class="row"><button class="primary" id="dl">Download model</button></div>
+  <div id="bar" class="hide"><b></b></div>
+</section>
+
+<div id="modes" role="tablist"></div>
+
+<section class="card">
+  <div id="recwrap">
+    <button id="rec" aria-label="Start recording"><i></i></button>
+    <div id="timer">0:00 / 5:00</div>
+    <label for="len" style="margin:0">Max length <select id="len"><option value="300">5 min</option><option value="600">10 min</option></select></label>
+    <div id="status" role="status" aria-live="polite"></div>
+    <button id="retry" class="hide">Retry last recording</button>
+  </div>
+  <textarea id="text" placeholder="Your dictation appears here. Each recording is added to the end. You can also use your keyboard’s mic or type."></textarea>
+  <div id="fixes"></div>
+  <div class="row">
+    <button id="share">Share to Notion</button>
+    <button id="copy">Copy</button>
+    <button id="save" class="primary">Save</button>
+  </div>
+  <details style="margin-top:10px"><summary>Raw transcript (before corrections)</summary><pre id="raw"></pre></details>
+</section>
+
+<details class="card">
+  <summary>Glossary: names and terms to fix</summary>
+  <div style="font-size:13px;color:var(--mute);margin-top:6px">One per line. Close misses get corrected to your spelling. For stubborn ones write <code>heard =&gt; correct</code>. Lines starting with # are ignored.</div>
+  <label for="gS">Shared (all modes)</label><textarea id="gS" class="g"></textarea>
+  <label for="gM" id="gMl"></label><textarea id="gM" class="g"></textarea>
+</details>
+
+<section class="card">
+  <h2>Saved notes</h2>
+  <div id="list"></div>
+  <div class="row"><button id="export">Export all as .md</button></div>
+</section>
+</main>
+
+<script type="module">
+const $=s=>document.querySelector(s);
+const store={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v??d}catch{return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+const MODES={physics:'Physics',ml:'Machine learning',story:'Story',journal:'Journal'};
+const MODELS={base:'onnx-community/whisper-base.en',small:'onnx-community/whisper-small.en'};
+let MAX=store.get('len',300);
+const SEED={shared:'# Add names and terms you use everywhere\n',
+ physics:'Schrödinger\nHamiltonian\nLagrangian\nHermitian\neigenvalue\neigenvector\nBoltzmann\nFeynman\nNoether\nPoincaré\nHilbert space\n',
+ ml:'PyTorch\nbackpropagation\nhyperparameter\nsoftmax\npie torch => PyTorch\nnum pie => NumPy\n',
+ story:'# Character, place and magic-system names go here\n',
+ journal:''};
+let st={mode:store.get('mode','physics'),model:store.get('model','base')};
+let gloss={...SEED,...store.get('gloss',{})};
+let notes=store.get('notes',[]);
+let asr=null,loading=null,dev='',lastBlob=null,rec=null,stream=null,chunks=[],tick=null,t0=0,wake=null;
+
+/* ---------- glossary correction ---------- */
+const fold=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+const phon=s=>fold(s).replace(/sch/g,'sh').replace(/ph/g,'f').replace(/ck/g,'k').replace(/[cq]/g,'k').replace(/z/g,'s').replace(/y/g,'i').replace(/(.)\1+/g,'$1');
+function lev(a,b){const p=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){let d=p[0];p[0]=i;for(let j=1;j<=b.length;j++){const t=p[j];p[j]=Math.min(p[j]+1,p[j-1]+1,d+(a[i-1]===b[j-1]?0:1));d=t}}return p[b.length]}
+const sim=(a,b)=>{const m=Math.max(a.length,b.length);return m?1-lev(a,b)/m:1};
+function spoken(t){return t.replace(/\s*\b(?:new|next) paragraph\b[.,!?]?\s*/gi,'\n\n').replace(/\s*\bnew line\b[.,!?]?\s*/gi,'\n')}
+function correct(text,lines){
+  const changes=[],rules=[],terms=[];
+  for(const l of lines){const t=l.trim();if(!t||t[0]==='#')continue;const i=t.indexOf('=>');
+    if(i>0)rules.push([t.slice(0,i).trim(),t.slice(i+2).trim()]);else terms.push(t)}
+  for(const [from,to] of rules){
+    const re=new RegExp('(?<![\\p{L}\\p{N}])'+from.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s+')+'(?![\\p{L}\\p{N}])','giu');
+    text=text.replace(re,m=>{if(m!==to)changes.push([m,to]);return to});
+  }
+  const words=[...text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’]*/gu)].map(m=>({s:m.index,e:m.index+m[0].length}));
+  const reps=[];
+  for(const term of terms){
+    const k=term.split(/\s+/).length,tf=fold(term),tp=phon(term);
+    if(tf.length<5)continue;
+    for(let i=0;i<words.length;i++)for(const n of [k-1,k,k+1]){
+      if(n<1||i+n>words.length)continue;
+      const s=words[i].s,e=words[i+n-1].e,seg=text.slice(s,e);
+      if(seg===term||/[^\p{L}\p{N}'’\- ]/u.test(seg))continue;
+      const cf=fold(seg);let sc=0;
+      if(cf===tf)sc=1;
+      else if(cf+'s'!==tf&&tf+'s'!==cf){const v=sim(phon(seg),tp);if(v>=(tf.length>=9?.8:.84))sc=v}
+      if(sc)reps.push({s,e,to:term,seg,sc});
+    }
+  }
+  reps.sort((x,y)=>y.sc-x.sc||(y.e-y.s)-(x.e-x.s));
+  const used=[];for(const r of reps)if(!used.some(u=>r.s<u.e&&r.e>u.s))used.push(r);
+  used.sort((x,y)=>y.s-x.s);
+  for(const r of used){text=text.slice(0,r.s)+r.to+text.slice(r.e);changes.push([r.seg,r.to])}
+  return {text,changes};
+}
+const activeLines=()=>(gloss.shared+'\n'+(gloss[st.mode]||'')).split('\n');
+
+/* ---------- UI ---------- */
+const status=(t,err)=>{$('#status').textContent=t;$('#status').className=err?'err':''};
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function renderModes(){
+  $('#modes').innerHTML=Object.entries(MODES).map(([k,v])=>`<button role="tab" aria-selected="${k===st.mode}" data-m="${k}" class="chip ${k===st.mode?'on':''}">${v}</button>`).join('');
+  $('#gMl').textContent=MODES[st.mode]+' terms';$('#gS').value=gloss.shared;$('#gM').value=gloss[st.mode]||'';
+}
+function renderList(){
+  $('#list').innerHTML=notes.length?notes.map(n=>`<div class="note"><div><small>${new Date(n.t).toLocaleString([], {dateStyle:'medium',timeStyle:'short'})} · ${MODES[n.mode]}</small><p>${esc(n.text.slice(0,90))}</p></div><button data-o="${n.id}">Open</button><button data-d="${n.id}" aria-label="Delete note">✕</button></div>`).join(''):'<div style="color:var(--mute);font-size:14px">Nothing saved yet. Dictate something and tap Save.</div>';
+}
+$('#modes').onclick=e=>{const m=e.target.dataset.m;if(m){st.mode=m;store.set('mode',m);renderModes()}};
+$('#gS').oninput=e=>{gloss.shared=e.target.value;store.set('gloss',gloss)};
+$('#gM').oninput=e=>{gloss[st.mode]=e.target.value;store.set('gloss',gloss)};
+$('#model').value=st.model;
+$('#model').onchange=e=>{st.model=e.target.value;store.set('model',st.model);asr=null;$('#dev').textContent='';syncSetup()};
+$('#text').value=store.get('draft','');
+$('#text').oninput=e=>store.set('draft',e.target.value);
+function syncSetup(){const ready=!!asr;$('#setup').classList.toggle('hide',ready);if(!ready&&store.get('ready:'+st.model,0)&&!loading)loadModel().catch(()=>{})}
+
+/* ---------- model ---------- */
+async function loadModel(){
+  if(asr)return asr;if(loading)return loading;
+  $('#bar').classList.remove('hide');$('#dl').disabled=true;
+  loading=(async()=>{
+    const {pipeline}=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1');
+    navigator.storage?.persist?.();
+    const id=MODELS[st.model];let files={};
+    const cb=p=>{if(p.status==='progress'&&p.file){files[p.file]=p;const v=Object.values(files);const l=v.reduce((a,x)=>a+x.loaded,0),t=v.reduce((a,x)=>a+x.total,0);$('#bar b').style.width=(t?100*l/t:0)+'%';status('Downloading model… '+Math.round(l/1048576)+' MB')}};
+    try{
+      if(!navigator.gpu)throw 0;
+      asr=await pipeline('automatic-speech-recognition',id,{device:'webgpu',dtype:{encoder_model:'fp32',decoder_model_merged:'q4'},progress_callback:cb});dev='GPU';
+    }catch{
+      files={};asr=await pipeline('automatic-speech-recognition',id,{device:'wasm',dtype:'q8',progress_callback:cb});dev='CPU';
+    }
+    store.set('ready:'+st.model,1);$('#dev').textContent=dev;status('Model ready.');
+    return asr;
+  })();
+  try{return await loading}catch(e){status('Model failed to load: '+(e.message||e),1);throw e}
+  finally{loading=null;$('#dl').disabled=false;$('#bar').classList.add('hide');syncSetup()}
+}
+$('#dl').onclick=()=>loadModel().catch(()=>{});
+
+/* ---------- recording ---------- */
+const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
+async function startRec(){
+  if(!navigator.mediaDevices?.getUserMedia)return status('Microphone needs a secure (https) page.',1);
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,noiseSuppression:true}})}
+  catch{return status('Microphone blocked. Allow it in your browser settings.',1)}
+  try{wake=await navigator.wakeLock?.request('screen')}catch{}
+  const mt=['audio/webm;codecs=opus','audio/mp4','audio/webm'].find(t=>MediaRecorder.isTypeSupported?.(t));
+  rec=new MediaRecorder(stream,mt?{mimeType:mt}:undefined);chunks=[];
+  rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
+  rec.onstop=()=>{stream.getTracks().forEach(t=>t.stop());wake?.release?.();transcribe(new Blob(chunks,{type:rec.mimeType||'audio/webm'}))};
+  rec.start(1000);t0=Date.now();
+  $('#rec').classList.add('on');$('#rec').setAttribute('aria-label','Stop recording');$('#retry').classList.add('hide');status('Listening…');
+  tick=setInterval(()=>{const s=(Date.now()-t0)/1000;$('#timer').textContent=fmt(s)+' / '+fmt(MAX);$('#timer').classList.toggle('warn',s>MAX-30);if(s>=MAX)stopRec()},250);
+}
+function stopRec(){clearInterval(tick);$('#timer').classList.remove('warn');$('#rec').classList.remove('on');$('#rec').setAttribute('aria-label','Start recording');if(rec?.state==='recording')rec.stop()}
+$('#rec').onclick=()=>rec?.state==='recording'?stopRec():startRec();
+
+async function toPCM(blob){
+  const ctx=new (window.AudioContext||window.webkitAudioContext)();
+  const ab=await ctx.decodeAudioData(await blob.arrayBuffer());ctx.close();
+  const off=new OfflineAudioContext(1,Math.ceil(ab.duration*16000),16000);
+  const src=off.createBufferSource();src.buffer=ab;src.connect(off.destination);src.start();
+  return (await off.startRendering()).getChannelData(0);
+}
+async function transcribe(blob){
+  lastBlob=blob;$('#retry').classList.add('hide');
+  const t1=Date.now();let w=setInterval(()=>status('Transcribing on your phone… '+fmt((Date.now()-t1)/1000)),500);
+  try{
+    status('Loading model…');const a=await loadModel();
+    const pcm=await toPCM(blob);
+    const out=await a(pcm,{chunk_length_s:30,stride_length_s:5});
+    const raw=(Array.isArray(out)?out[0]:out).text.trim();
+    const r=correct(spoken(raw),activeLines());
+    const ed=$('#text');ed.value=(ed.value.trim()?ed.value.trimEnd()+'\n\n':'')+r.text;store.set('draft',ed.value);
+    $('#raw').textContent=($('#raw').textContent?$('#raw').textContent+'\n\n':'')+raw;
+    $('#fixes').textContent=r.changes.length?'Corrected: '+r.changes.map(c=>c[0]+' → '+c[1]).join(' · '):'';
+    status('Done. Check the text, then Save or Share.');
+  }catch(e){status('Transcription failed: '+(e.message||e),1);$('#retry').classList.remove('hide')}
+  finally{clearInterval(w)}
+}
+$('#retry').onclick=()=>lastBlob&&transcribe(lastBlob);
+
+/* ---------- output ---------- */
+$('#copy').onclick=async()=>{try{await navigator.clipboard.writeText($('#text').value);status('Copied.')}catch{status('Copy failed. Select the text and copy manually.',1)}};
+$('#share').onclick=async()=>{const text=$('#text').value;if(!text.trim())return;
+  if(navigator.share){try{await navigator.share({title:'Dictation',text})}catch{}}
+  else{await navigator.clipboard?.writeText(text);status('Sharing isn’t available here, so the text was copied. Paste it into Notion.')}};
+$('#save').onclick=()=>{const text=$('#text').value.trim();if(!text)return;
+  notes.unshift({id:Date.now().toString(36),t:Date.now(),mode:st.mode,text});store.set('notes',notes);
+  $('#text').value='';$('#raw').textContent='';$('#fixes').textContent='';store.set('draft','');renderList();status('Saved on this phone.')};
+$('#list').onclick=e=>{const o=e.target.dataset.o,d=e.target.dataset.d;
+  if(o){const n=notes.find(x=>x.id===o);if(n){$('#text').value=n.text;store.set('draft',n.text);scrollTo({top:0,behavior:'smooth'})}}
+  if(d&&confirm('Delete this note?')){notes=notes.filter(x=>x.id!==d);store.set('notes',notes);renderList()}};
+$('#export').onclick=()=>{if(!notes.length)return;
+  const md=notes.map(n=>`## ${new Date(n.t).toLocaleString()} · ${MODES[n.mode]}\n\n${n.text}\n`).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([md],{type:'text/markdown'}));a.download='dictation-notes.md';a.click()};
+
+$('#len').value=String(MAX);$('#timer').textContent='0:00 / '+fmt(MAX);
+$('#len').onchange=e=>{MAX=+e.target.value;store.set('len',MAX);if(rec?.state!=='recording')$('#timer').textContent='0:00 / '+fmt(MAX)};
+renderModes();renderList();syncSetup();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
